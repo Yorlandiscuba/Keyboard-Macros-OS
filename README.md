@@ -64,4 +64,4 @@ La casilla «Iniciar con Windows» crea un acceso del usuario actual. Apunta a e
 
 ## Publicar
 
-El repositorio se llama `keyboard-macros-os`. Al empujar una etiqueta `v0.1.0`, el workflow `.github/workflows/release.yml` prueba, compila en Windows y adjunta `keyboard-macros-os-windows.zip` a la release. Ese equipo usa el compilador de Visual Studio que trae GitHub. En local se sigue el apartado Entorno.
+El repositorio se llama `keyboard-macros-os`. Cada push a `main` dispara `.github/workflows/release.yml`: prueba, compila en Windows, sube el parche (`v0.1.0`, `v0.1.1`, `v0.1.2`…) y adjunta `keyboard-macros-os-windows.zip` a esa release. Ese equipo usa el compilador de Visual Studio que trae GitHub. En local se sigue el apartado Entorno.

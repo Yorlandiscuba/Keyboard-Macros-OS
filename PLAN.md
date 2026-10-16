@@ -58,7 +58,7 @@ Núcleo, en este orden:
 
 Publicación, cuando el Bloc de notas ya recibe el texto:
 
-- `[x]` Workflow de GitHub que produce el binario de Windows al etiquetar `v*`. Linux entra cuando exista ese borde.
+- `[x]` Workflow de GitHub que, en cada push a `main`, sube el parche y publica el binario de Windows. Linux entra cuando exista ese borde.
 - `[x]` El mismo commit se compila en local siguiendo el README. En GitHub el host es MSVC; en esta máquina, GNU.
 
 ## Segunda versión

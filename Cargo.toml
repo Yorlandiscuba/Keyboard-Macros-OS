@@ -1,6 +1,6 @@
 [package]
 name = "keyboard-macros-os"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Atajos globales que insertan texto. Windows primero."
 license = "MIT"

@@ -2,8 +2,8 @@ name: Windows
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -14,10 +14,36 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Siguiente versión
+        id: ver
+        shell: pwsh
+        run: |
+          $existing = git tag --points-at HEAD | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } | Select-Object -First 1
+          if ($existing) {
+            $version = $existing.Substring(1)
+            $tag = $existing
+          } else {
+            $latest = [version]"0.0.0"
+            git tag -l "v*" | ForEach-Object {
+              if ($_ -match '^v(\d+)\.(\d+)\.(\d+)$') {
+                $parsed = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
+                if ($parsed -gt $latest) { $latest = $parsed }
+              }
+            }
+            $version = "$($latest.Major).$($latest.Minor).$($latest.Build + 1)"
+            $tag = "v$version"
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Output "Release $tag"
       - uses: dtolnay/rust-toolchain@stable
       - name: Probar
         run: cargo test --locked
       - name: Compilar
+        env:
+          KMOS_FILE_VERSION: ${{ steps.ver.outputs.version }}
         run: cargo build --release --locked
       - name: Empaquetar
         shell: pwsh
@@ -27,7 +53,9 @@ jobs:
           Copy-Item README.md, LICENSE, macros.example.json dist/
           Compress-Archive -Path dist/* -DestinationPath keyboard-macros-os-windows.zip -Force
       - name: Publicar
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
           files: keyboard-macros-os-windows.zip
+          generate_release_notes: true
