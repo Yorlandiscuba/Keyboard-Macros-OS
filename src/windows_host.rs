@@ -108,7 +108,7 @@ fn worker(engine: Arc<Mutex<Engine>>, report: Arc<Mutex<String>>, ready: mpsc::S
                 let engine = engine.lock().expect("motor");
                 match engine.action(slot) {
                     Some(Action::InsertText { text }) => Some(text.clone()),
-                    None => None,
+                    Some(Action::Unconverted { .. }) | None => None,
                 }
             };
             if let Some(text) = text {

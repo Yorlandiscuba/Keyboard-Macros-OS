@@ -11,7 +11,16 @@ impl Engine {
         let mut macros = Vec::with_capacity(document.macros.len());
         let mut chords = Vec::with_capacity(document.macros.len());
         for macro_ in &document.macros {
-            chords.push(parse_chord(&macro_.hotkey)?);
+            if !macro_.action.runs_now() {
+                continue;
+            }
+            let Some(hotkey) = &macro_.hotkey else {
+                continue;
+            };
+            if hotkey.key.trim().is_empty() {
+                continue;
+            }
+            chords.push(parse_chord(hotkey)?);
             macros.push(macro_.clone());
         }
         Ok(Self { macros, chords })

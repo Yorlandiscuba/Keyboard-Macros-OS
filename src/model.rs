@@ -14,7 +14,8 @@ pub struct Macro {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
-    pub hotkey: Hotkey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hotkey: Option<Hotkey>,
     pub action: Action,
 }
 
@@ -38,6 +39,19 @@ pub enum Modifier {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
     InsertText { text: String },
+    /// Cuerpo guardado de otro programa que este motor todavía no ejecuta.
+    Unconverted {
+        kind: String,
+        note: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        blob: Option<String>,
+    },
+}
+
+impl Action {
+    pub fn runs_now(&self) -> bool {
+        matches!(self, Action::InsertText { .. })
+    }
 }
 
 /// Atajo ya comprobado. El nombre de la tecla no depende de Windows.
@@ -195,6 +209,46 @@ fn digit_label(c: char) -> &'static str {
         '9' => "9",
         _ => "?",
     }
+}
+
+pub fn modifiers_from_mask(mask: u32) -> Vec<Modifier> {
+    let mut modifiers = Vec::new();
+    if mask & 0x02 != 0 {
+        modifiers.push(Modifier::Ctrl);
+    }
+    if mask & 0x04 != 0 {
+        modifiers.push(Modifier::Shift);
+    }
+    if mask & 0x01 != 0 {
+        modifiers.push(Modifier::Alt);
+    }
+    if mask & 0x08 != 0 {
+        modifiers.push(Modifier::Win);
+    }
+    modifiers
+}
+
+pub fn key_from_virtual_code(code: u32) -> Option<Key> {
+    Some(match code {
+        0x30..=0x39 => Key::Digit(char::from(code as u8)),
+        0x41..=0x5A => Key::Letter(char::from(code as u8).to_ascii_lowercase()),
+        0x70..=0x87 => Key::Function((code - 0x6F) as u8),
+        0x60..=0x69 => Key::Numpad((code - 0x60) as u8),
+        0x6B => Key::NumpadAdd,
+        0x6D => Key::NumpadSub,
+        0x6A => Key::NumpadMul,
+        0x6F => Key::NumpadDiv,
+        0x6E => Key::NumpadDec,
+        0x20 => Key::Space,
+        0x0D => Key::Enter,
+        0x09 => Key::Tab,
+        0x1B => Key::Escape,
+        0x25 => Key::Left,
+        0x27 => Key::Right,
+        0x26 => Key::Up,
+        0x28 => Key::Down,
+        _ => return None,
+    })
 }
 
 pub fn parse_chord(hotkey: &Hotkey) -> Result<Chord, String> {

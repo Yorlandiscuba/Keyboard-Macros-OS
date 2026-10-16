@@ -15,7 +15,7 @@ El programa ya tiene el primer corte en Rust: archivo, motor y borde de Windows.
 - `[x]` Lenguaje: Rust. Primera plataforma: Windows. El binario se llama `kmos`.
 - `[x]` Interfaz gráfica: ventana para listar, crear, editar y borrar macros. Cerrar la ventana la deja en la bandeja.
 - `[x]` Licencia MIT. El texto está en `LICENSE`.
-- `[ ]` Elegir el nombre del repositorio.
+- `[x]` Nombre del repositorio: `keyboard-macros-os`.
 - `[x]` Alcance de esta primera rebanada: atajo global que inserta un texto, en Windows. Linux queda previsto en el motor, que no llama al sistema.
 
 ## Investigación ya hecha
@@ -45,7 +45,7 @@ Ninguna de estas bloquea «atajo → texto».
 Núcleo, en este orden:
 
 - `[x]` Repositorio en `Keyboard Macros OS` con instrucciones de compilación en el README: rustup, host GNU y MinGW (`as.exe`).
-- `[x]` Archivo de macros propio, JSON, esquema versión 1. Campos: id, nombre, padre opcional, atajo (modificadores + tecla), acción `insert_text`.
+- `[x]` Archivo de macros propio, JSON, esquema versión 1. Campos: id, nombre, padre opcional, atajo opcional (modificadores + tecla), acción `insert_text` o `unconverted`.
 - `[x]` Almacén: leer, validar y guardar ese archivo. `macros.example.json`.
 - `[x]` Motor: dado un atajo, elegir la macro y pedir «insertar este texto». No llama al sistema.
 - `[x]` Contrato del borde: el motor entrega la acción; cada sistema la ejecuta. Hoy solo Windows.
@@ -53,13 +53,13 @@ Núcleo, en este orden:
 - `[x]` Prueba manual: Control o Shift más una tecla escribe una frase en el Bloc de notas.
 - `[x]` Ventana mínima: lista, alta, edición y borrado. Cerrar la deja en la bandeja; Salir está en el icono.
 - `[x]` Marca de `branding/`: icono de la ventana, K de la bandeja según el tema de la barra, y el logo horizontal como banner. La ventana usa la paleta navy.
-- `[ ]` Importador de `HotKeyboardData.xml`: menú, nombre, atajo y texto plano. Las grabaciones quedan sin convertir.
-- `[ ]` Arranque con Windows, como opción, no como requisito del primer día.
+- `[x]` Importador de `HotKeyboardData.xml`: menú, nombre, atajo y texto plano. Las grabaciones se guardan y quedan marcadas como no reproducibles.
+- `[x]` Arranque con Windows, como opción. El acceso apunta al ejecutable y al archivo de macros abiertos.
 
 Publicación, cuando el Bloc de notas ya recibe el texto:
 
-- `[ ]` Workflow de GitHub que produzca un binario de Windows y, cuando exista el borde, uno de Linux.
-- `[ ]` El mismo commit debe poder compilarse en local siguiendo el README.
+- `[x]` Workflow de GitHub que produce el binario de Windows al etiquetar `v*`. Linux entra cuando exista ese borde.
+- `[x]` El mismo commit se compila en local siguiendo el README. En GitHub el host es MSVC; en esta máquina, GNU.
 
 ## Segunda versión
 

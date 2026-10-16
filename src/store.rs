@@ -45,7 +45,16 @@ pub fn check(document: &Document) -> Result<(), String> {
             return Err(format!("id repetido: {}", macro_.id));
         }
         seen_ids.push(macro_.id.clone());
-        let chord = parse_chord(&macro_.hotkey).map_err(|error| {
+        let Some(hotkey) = &macro_.hotkey else {
+            continue;
+        };
+        if hotkey.key.trim().is_empty() {
+            if hotkey.modifiers.is_empty() {
+                continue;
+            }
+            return Err(format!("«{}» tiene modificadores y ninguna tecla", macro_.name));
+        }
+        let chord = parse_chord(hotkey).map_err(|error| {
             format!("atajo de «{}» ({}) inválido: {error}", macro_.name, macro_.id)
         })?;
         if seen_chords.contains(&chord) {

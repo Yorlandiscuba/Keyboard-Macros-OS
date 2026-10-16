@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use crate::brand::{self, BLUE, MARK, MUTED, NAVY_RAISED, SLATE};
 use crate::engine::Engine;
+use crate::import_hk;
 use crate::model::{parse_chord, Action, Document, Hotkey, Macro, Modifier};
 use crate::store;
 use crate::tray::{Tray, TrayAction};
@@ -15,6 +16,7 @@ enum UiAction {
     New,
     Delete,
     Save,
+    Import,
 }
 
 pub struct KmosApp {
@@ -29,6 +31,7 @@ pub struct KmosApp {
     quitting: bool,
     banner: Option<egui::TextureHandle>,
     mark: Option<egui::TextureHandle>,
+    startup: bool,
 }
 
 pub fn run(path: PathBuf, document: Document, notice: String) -> Result<(), String> {
@@ -51,6 +54,7 @@ pub fn run(path: PathBuf, document: Document, notice: String) -> Result<(), Stri
         quitting: false,
         banner: None,
         mark: None,
+        startup: startup_enabled(),
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -121,11 +125,14 @@ impl eframe::App for KmosApp {
                     if ui.button("Borrar").clicked() {
                         action = UiAction::Delete;
                     }
+                    if ui.button("Importar").clicked() {
+                        action = UiAction::Import;
+                    }
                 });
                 ui.separator();
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for index in 0..self.document.macros.len() {
-                        let shortcut = shortcut_label(&self.document.macros[index].hotkey);
+                        let shortcut = shortcut_label(self.document.macros[index].hotkey.as_ref());
                         let name = self.document.macros[index].name.clone();
                         let selected = self.selected == Some(index);
                         if ui
@@ -142,7 +149,12 @@ impl eframe::App for KmosApp {
             ui.add_space(6.0);
             ui.colored_label(MUTED, self.path.display().to_string());
             ui.separator();
-            self.editor(ui);
+            let editor_height = (ui.available_height() - 118.0).max(80.0);
+            egui::ScrollArea::vertical()
+                .max_height(editor_height)
+                .show(ui, |ui| {
+                    self.editor(ui);
+                });
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.add(egui::Button::new("Guardar").fill(BLUE)).clicked() {
@@ -153,6 +165,7 @@ impl eframe::App for KmosApp {
                     "El atajo sigue activo al cerrar la ventana. Salir está en la bandeja.",
                 );
             });
+            startup_toggle(ui, self);
             ui.add_space(8.0);
             ui.colored_label(MUTED, self.host.report());
             if !self.notice.is_empty() {
@@ -238,30 +251,49 @@ impl KmosApp {
                 }
                 ui.end_row();
                 ui.label("Tecla");
-                ui.text_edit_singleline(&mut macro_.hotkey.key);
+                let mut key = macro_
+                    .hotkey
+                    .as_ref()
+                    .map(|hotkey| hotkey.key.clone())
+                    .unwrap_or_default();
+                if ui.text_edit_singleline(&mut key).changed() {
+                    ensure_hotkey(macro_).key = key;
+                }
                 ui.end_row();
             });
         ui.horizontal(|ui| {
-            toggle(ui, &mut macro_.hotkey, Modifier::Ctrl, "Ctrl");
-            toggle(ui, &mut macro_.hotkey, Modifier::Shift, "Shift");
-            toggle(ui, &mut macro_.hotkey, Modifier::Alt, "Alt");
-            toggle(ui, &mut macro_.hotkey, Modifier::Win, "Win");
+            toggle(ui, macro_, Modifier::Ctrl, "Ctrl");
+            toggle(ui, macro_, Modifier::Shift, "Shift");
+            toggle(ui, macro_, Modifier::Alt, "Alt");
+            toggle(ui, macro_, Modifier::Win, "Win");
         });
-        match parse_chord(&macro_.hotkey) {
-            Ok(chord) => {
-                ui.label(format!("Atajo: {}", chord.label()));
-            }
-            Err(error) => {
-                ui.colored_label(egui::Color32::from_rgb(176, 48, 48), error);
+        match macro_.hotkey.as_ref() {
+            Some(hotkey) if !hotkey.key.trim().is_empty() => match parse_chord(hotkey) {
+                Ok(chord) => {
+                    ui.label(format!("Atajo: {}", chord.label()));
+                }
+                Err(error) => {
+                    ui.colored_label(egui::Color32::from_rgb(176, 48, 48), error);
+                }
+            },
+            _ => {
+                ui.label("Sin atajo.");
             }
         }
-        ui.label("Texto");
-        let Action::InsertText { text } = &mut macro_.action;
-        ui.add(
-            egui::TextEdit::multiline(text)
-                .desired_rows(12)
-                .desired_width(f32::INFINITY),
-        );
+        match &mut macro_.action {
+            Action::InsertText { text } => {
+                ui.label("Texto");
+                ui.add(
+                    egui::TextEdit::multiline(text)
+                        .desired_rows(8)
+                        .desired_width(f32::INFINITY),
+                );
+            }
+            Action::Unconverted { note, .. } => {
+                ui.add_space(8.0);
+                ui.label(note.as_str());
+            }
+        }
     }
 
     fn apply(&mut self, action: UiAction) {
@@ -270,6 +302,56 @@ impl KmosApp {
             UiAction::New => self.add_macro(),
             UiAction::Delete => self.delete_selected(),
             UiAction::Save => self.save_document(),
+            UiAction::Import => self.import_file(),
+        }
+    }
+
+    fn import_file(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Importar Hot Keyboard")
+            .add_filter("Hot Keyboard", &["xml", "hk4backup"])
+            .pick_file()
+        else {
+            return;
+        };
+        match import_hk::import_path(&path, &mut self.document) {
+            Ok(report) => {
+                self.selected = if self.document.macros.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                };
+                self.save_document();
+                if self.notice.starts_with("Guardado") {
+                    self.notice = report.summary();
+                }
+            }
+            Err(error) => self.notice = error,
+        }
+    }
+
+    fn apply_startup(&mut self, enabled: bool) {
+        #[cfg(windows)]
+        {
+            match crate::startup::set_enabled(enabled, &self.path) {
+                Ok(()) => {
+                    self.startup = enabled;
+                    self.notice = if enabled {
+                        "Se abrirá al iniciar Windows. El acceso apunta a este ejecutable y a este archivo.".into()
+                    } else {
+                        "Ya no se abrirá al iniciar Windows.".into()
+                    };
+                }
+                Err(error) => {
+                    self.startup = crate::startup::is_enabled().unwrap_or(false);
+                    self.notice = error;
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = enabled;
+            self.notice = "El arranque con el sistema todavía no está en esta plataforma.".into();
         }
     }
 
@@ -323,9 +405,13 @@ impl KmosApp {
     }
 }
 
-fn toggle(ui: &mut egui::Ui, hotkey: &mut Hotkey, modifier: Modifier, label: &str) {
-    let mut enabled = hotkey.modifiers.contains(&modifier);
+fn toggle(ui: &mut egui::Ui, macro_: &mut Macro, modifier: Modifier, label: &str) {
+    let mut enabled = macro_
+        .hotkey
+        .as_ref()
+        .is_some_and(|hotkey| hotkey.modifiers.contains(&modifier));
     if ui.checkbox(&mut enabled, label).changed() {
+        let hotkey = ensure_hotkey(macro_);
         if enabled {
             if !hotkey.modifiers.contains(&modifier) {
                 hotkey.modifiers.push(modifier);
@@ -336,10 +422,41 @@ fn toggle(ui: &mut egui::Ui, hotkey: &mut Hotkey, modifier: Modifier, label: &st
     }
 }
 
-fn shortcut_label(hotkey: &Hotkey) -> String {
+fn ensure_hotkey(macro_: &mut Macro) -> &mut Hotkey {
+    if macro_.hotkey.is_none() {
+        macro_.hotkey = Some(Hotkey {
+            modifiers: Vec::new(),
+            key: String::new(),
+        });
+    }
+    macro_.hotkey.as_mut().expect("atajo")
+}
+
+fn shortcut_label(hotkey: Option<&Hotkey>) -> String {
+    let Some(hotkey) = hotkey else {
+        return "sin atajo".into();
+    };
     parse_chord(hotkey)
         .map(|chord| chord.label())
         .unwrap_or_else(|_| hotkey.key.clone())
+}
+
+fn startup_toggle(ui: &mut egui::Ui, app: &mut KmosApp) {
+    let mut enabled = app.startup;
+    if ui.checkbox(&mut enabled, "Iniciar con Windows").changed() {
+        app.apply_startup(enabled);
+    }
+}
+
+fn startup_enabled() -> bool {
+    #[cfg(windows)]
+    {
+        crate::startup::is_enabled().unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 fn fresh_macro(document: &Document) -> Macro {
@@ -347,7 +464,7 @@ fn fresh_macro(document: &Document) -> Macro {
         id: unique_id(document),
         name: "Nueva macro".into(),
         parent: None,
-        hotkey: unused_hotkey(document),
+        hotkey: Some(unused_hotkey(document)),
         action: Action::InsertText { text: String::new() },
     }
 }
@@ -366,7 +483,8 @@ fn unused_hotkey(document: &Document) -> Hotkey {
     let used: Vec<_> = document
         .macros
         .iter()
-        .filter_map(|macro_| parse_chord(&macro_.hotkey).ok())
+        .filter_map(|macro_| macro_.hotkey.as_ref())
+        .filter_map(|hotkey| parse_chord(hotkey).ok())
         .collect();
     let letters = ('a'..='z').map(|letter| letter.to_string());
     let functions = (1..=12).map(|number| format!("f{number}"));
@@ -402,8 +520,8 @@ mod tests {
             })],
         };
         let another = fresh_macro(&document);
-        let first = parse_chord(&document.macros[0].hotkey).unwrap();
-        let second = parse_chord(&another.hotkey).unwrap();
+        let first = parse_chord(document.macros[0].hotkey.as_ref().unwrap()).unwrap();
+        let second = parse_chord(another.hotkey.as_ref().unwrap()).unwrap();
         assert_ne!(document.macros[0].id, another.id);
         assert_ne!(first, second);
     }

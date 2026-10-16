@@ -47,3 +47,21 @@ cargo run --release
 Deja el Bloc de notas enfocado y pulsa `Ctrl+Shift+H`. El programa pega `Hola desde Keyboard Macros OS` y restaura el portapapeles. Cerrar la ventana la deja en la bandeja: el atajo sigue activo. En el icono, Abrir muestra la ventana y Salir termina el programa.
 
 `macros.json` no se versiona: ahí van los textos propios.
+
+## Importar Hot Keyboard
+
+En la ventana, Importar abre un `HotKeyboardData.xml` o una copia `.hk4backup`. También se puede hacer desde la terminal:
+
+```powershell
+cargo run --release -- --import "ruta\HotKeyboardData.xml" --file macros.json
+```
+
+Se conservan el grupo, el nombre, el atajo y el texto plano. Una macro sin atajo entra igual y se le puede asignar uno después. Una grabación se guarda y queda marcada como no reproducible: su atajo no se registra. Volver a importar el mismo archivo actualiza esas macros y no duplica las que ya estaban.
+
+## Iniciar con Windows
+
+La casilla «Iniciar con Windows» crea un acceso del usuario actual. Apunta a este ejecutable y al archivo que está abierto. Si más adelante compilas otro `kmos.exe`, vuelve a marcar la casilla para que el acceso use ese ejecutable.
+
+## Publicar
+
+El repositorio se llama `keyboard-macros-os`. Al empujar una etiqueta `v0.1.0`, el workflow `.github/workflows/release.yml` prueba, compila en Windows y adjunta `keyboard-macros-os-windows.zip` a la release. Ese equipo usa el compilador de Visual Studio que trae GitHub. En local se sigue el apartado Entorno.
