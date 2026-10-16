@@ -1,7 +1,12 @@
 use std::fs;
 use std::path::Path;
 
-use crate::model::{parse_chord, Document, SCHEMA_VERSION};
+use crate::model::{
+    check_condition, check_delay, check_expression_action, check_folder, check_launch, check_names,
+    check_open_file, check_page, check_reminder, check_replace, check_sequence, check_shot,
+    check_target_id, check_trigger, check_variable_name, check_volume, check_window, parse_chord,
+    parse_key, Action, Document, InputEvent, Repeat, SCHEMA_VERSION,
+};
 
 pub fn load(path: &Path) -> Result<Document, String> {
     let text = fs::read_to_string(path)
@@ -45,6 +50,7 @@ pub fn check(document: &Document) -> Result<(), String> {
             return Err(format!("id repetido: {}", macro_.id));
         }
         seen_ids.push(macro_.id.clone());
+        check_action(macro_)?;
         let Some(hotkey) = &macro_.hotkey else {
             continue;
         };
@@ -61,6 +67,123 @@ pub fn check(document: &Document) -> Result<(), String> {
             return Err(format!("el atajo {} está repetido", chord.label()));
         }
         seen_chords.push(chord);
+    }
+    if document.variables.len() > 64 {
+        return Err("hay demasiadas variables guardadas".into());
+    }
+    for (name, value) in &document.variables {
+        check_variable_name(name)?;
+        if value.chars().count() > 4_096 {
+            return Err(format!("el valor de {name} es demasiado largo"));
+        }
+    }
+    Ok(())
+}
+
+fn check_filters(macro_: &crate::model::Macro) -> Result<(), String> {
+    if let Some(trigger) = &macro_.trigger {
+        check_trigger(trigger).map_err(|error| format!("«{}»: {error}", macro_.name))?;
+        if let crate::model::Trigger::Multitap { key, .. } = trigger {
+            parse_key(key).map_err(|error| format!("«{}»: {error}", macro_.name))?;
+        }
+    }
+    if let Some(condition) = &macro_.condition {
+        check_condition(condition).map_err(|error| format!("«{}»: {error}", macro_.name))?;
+    }
+    Ok(())
+}
+
+fn check_action(macro_: &crate::model::Macro) -> Result<(), String> {
+    check_filters(macro_)?;
+    let Action::Play {
+        events,
+        speed,
+        repeat,
+    } = &macro_.action
+    else {
+        if let Action::OpenFile {
+            path,
+            program,
+            arguments,
+        } = &macro_.action
+        {
+            return check_open_file(path, program, arguments)
+                .map_err(|error| format!("«{}»: {error}", macro_.name));
+        }
+        if let Action::Launch {
+            program,
+            arguments,
+            directory,
+            ..
+        } = &macro_.action
+        {
+            return check_launch(program, arguments, directory)
+                .map_err(|error| format!("«{}»: {error}", macro_.name));
+        }
+        if let Action::OpenFolder { path } = &macro_.action {
+            return check_folder(path).map_err(|error| format!("«{}»: {error}", macro_.name));
+        }
+        if let Action::OpenPage { url, browser, .. } = &macro_.action {
+            return check_page(url, browser).map_err(|error| format!("«{}»: {error}", macro_.name));
+        }
+        if let Action::Window { op } = &macro_.action {
+            return check_window(op).map_err(|error| format!("«{}»: {error}", macro_.name));
+        }
+        if let Action::Volume { op } = &macro_.action {
+            return check_volume(op).map_err(|error| format!("«{}»: {error}", macro_.name));
+        }
+        if let Action::Replace {
+            rules,
+            max_iterations,
+            max_length_kb,
+        } = &macro_.action
+        {
+            return check_replace(rules, *max_iterations, *max_length_kb)
+                .map_err(|error| format!("«{}»: {error}", macro_.name));
+        }
+        let checked = match &macro_.action {
+            Action::Power { .. } | Action::Media { .. } => Ok(()),
+            Action::Delay { delay } => check_delay(delay),
+            Action::Run { id } => check_target_id(id),
+            Action::Sequence { ids } => check_sequence(ids),
+            Action::Expression { source, variable } => check_expression_action(source, variable),
+            Action::Reminder { title, text } => check_reminder(title, text),
+            Action::Screenshot { source, dest, .. } => check_shot(source, dest),
+            Action::SaveVars { names } => check_names(names),
+            _ => Ok(()),
+        };
+        return checked.map_err(|error| format!("«{}»: {error}", macro_.name));
+    };
+    if !(10..=400).contains(speed) {
+        return Err(format!(
+            "la velocidad de «{}» tiene que estar entre 10 y 400",
+            macro_.name
+        ));
+    }
+    if let Repeat::Times { count } = repeat {
+        if !(1..=100).contains(count) {
+            return Err(format!(
+                "las repeticiones de «{}» tienen que estar entre 1 y 100",
+                macro_.name
+            ));
+        }
+    }
+    if events.len() > 5_000 {
+        return Err(format!("«{}» tiene demasiados eventos", macro_.name));
+    }
+    for event in events {
+        match event {
+            InputEvent::Key { key, .. } => {
+                parse_key(key).map_err(|error| format!("«{}»: {error}", macro_.name))?;
+            }
+            InputEvent::Wait { millis } if *millis > 60_000 => {
+                return Err(format!(
+                    "una espera de «{}» pasa de 60 segundos",
+                    macro_.name
+                ));
+            }
+            InputEvent::Wait { .. } | InputEvent::Button { .. } | InputEvent::Move { .. } => {}
+        }
     }
     Ok(())
 }

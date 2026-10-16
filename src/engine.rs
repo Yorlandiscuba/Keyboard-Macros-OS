@@ -1,19 +1,22 @@
-use crate::model::{parse_chord, Action, Chord, Document, Macro};
+use crate::model::{parse_chord, Chord, Document, Macro};
 
 /// Elige la macro de un atajo. No habla con el sistema operativo.
 pub struct Engine {
     macros: Vec<Macro>,
     chords: Vec<Chord>,
+    catalog: Vec<Macro>,
 }
 
 impl Engine {
     pub fn from_document(document: &Document) -> Result<Self, String> {
         let mut macros = Vec::with_capacity(document.macros.len());
         let mut chords = Vec::with_capacity(document.macros.len());
+        let mut catalog = Vec::new();
         for macro_ in &document.macros {
             if !macro_.action.runs_now() {
                 continue;
             }
+            catalog.push(macro_.clone());
             let Some(hotkey) = &macro_.hotkey else {
                 continue;
             };
@@ -23,7 +26,19 @@ impl Engine {
             chords.push(parse_chord(hotkey)?);
             macros.push(macro_.clone());
         }
-        Ok(Self { macros, chords })
+        Ok(Self {
+            macros,
+            chords,
+            catalog,
+        })
+    }
+
+    pub fn find(&self, id: &str) -> Option<&Macro> {
+        self.catalog.iter().find(|macro_| macro_.id == id)
+    }
+
+    pub fn catalog(&self) -> &[Macro] {
+        &self.catalog
     }
 
     pub fn len(&self) -> usize {
@@ -42,8 +57,8 @@ impl Engine {
             .map(|(index, (chord, macro_))| (index, chord, macro_))
     }
 
-    pub fn action(&self, slot: usize) -> Option<&Action> {
-        self.macros.get(slot).map(|macro_| &macro_.action)
+    pub fn slot(&self, slot: usize) -> Option<&Macro> {
+        self.macros.get(slot)
     }
 }
 
@@ -67,10 +82,34 @@ mod tests {
         )
         .unwrap();
         let engine = Engine::from_document(&document).unwrap();
-        match engine.action(0) {
+        match engine.slot(0).map(|macro_| &macro_.action) {
             Some(Action::InsertText { text }) => assert_eq!(text, "hola"),
             other => panic!("acción inesperada: {other:?}"),
         }
-        assert!(engine.action(1).is_none());
+        assert!(engine.slot(1).is_none());
+    }
+
+    #[test]
+    fn a_recording_with_a_hotkey_is_bound() {
+        let document = crate::store::parse(
+            r#"{
+              "version": 1,
+              "macros": [{
+                "id": "rec",
+                "name": "Grabación",
+                "hotkey": { "modifiers": [], "key": "f13" },
+                "action": {
+                  "type": "play",
+                  "speed": 100,
+                  "repeat": { "kind": "times", "count": 1 },
+                  "events": [{ "type": "key", "key": "a", "down": true }]
+                }
+              }]
+            }"#,
+        )
+        .unwrap();
+        let engine = Engine::from_document(&document).unwrap();
+        assert_eq!(engine.len(), 1);
+        assert!(matches!(engine.slot(0).map(|macro_| &macro_.action), Some(Action::Play { .. })));
     }
 }

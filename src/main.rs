@@ -3,6 +3,7 @@
 mod brand;
 mod engine;
 mod import_hk;
+mod logic;
 mod model;
 mod store;
 mod tray;
@@ -75,6 +76,7 @@ fn run() -> Result<(), String> {
             Document {
                 version: SCHEMA_VERSION,
                 macros: Vec::new(),
+                variables: Default::default(),
             },
             format!("Se creará {} al guardar.", path.display()),
         )

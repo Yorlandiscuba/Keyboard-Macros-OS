@@ -125,6 +125,8 @@ fn convert_macro(
         name,
         parent,
         hotkey,
+        trigger: None,
+        condition: None,
         action,
     })
 }
@@ -444,6 +446,7 @@ mod tests {
         let mut document = Document {
             version: SCHEMA_VERSION,
             macros: Vec::new(),
+            variables: Default::default(),
         };
         let report = import_xml(SAMPLE, &mut document).unwrap();
         assert_eq!(report.added, 3);
@@ -480,6 +483,7 @@ mod tests {
         let mut document = Document {
             version: SCHEMA_VERSION,
             macros: Vec::new(),
+            variables: Default::default(),
         };
         import_xml(SAMPLE, &mut document).unwrap();
         let report = import_xml(SAMPLE, &mut document).unwrap();
@@ -509,6 +513,7 @@ mod tests {
         let mut document = Document {
             version: SCHEMA_VERSION,
             macros: Vec::new(),
+            variables: Default::default(),
         };
         let report = import_xml(&xml, &mut document).unwrap();
         assert_eq!(report.texts, 11);
@@ -535,6 +540,23 @@ mod tests {
                     assert_eq!(kind, "MRecordMacro");
                     assert!(blob.as_ref().is_some_and(|blob| !blob.is_empty()));
                 }
+                Action::Play { .. } => panic!("la importación no crea una grabación propia"),
+                Action::OpenFile { .. } => panic!("la importación no crea un archivo propio"),
+                Action::Launch { .. } => panic!("la importación no crea un programa propio"),
+                Action::OpenFolder { .. } => panic!("la importación no crea una carpeta propia"),
+                Action::OpenPage { .. } => panic!("la importación no crea una página propia"),
+                Action::Window { .. } => panic!("la importación no crea una ventana propia"),
+                Action::Volume { .. } => panic!("la importación no crea un volumen propio"),
+                Action::Replace { .. } => panic!("la importación no crea un reemplazo propio"),
+                Action::Power { .. } => panic!("la importación no crea un apagado propio"),
+                Action::Media { .. } => panic!("la importación no crea un medio propio"),
+                Action::Delay { .. } => panic!("la importación no crea una espera propia"),
+                Action::Run { .. } => panic!("la importación no crea un enlace propio"),
+                Action::Sequence { .. } => panic!("la importación no crea una cadena propia"),
+                Action::Expression { .. } => panic!("la importación no crea una expresión propia"),
+                Action::Reminder { .. } => panic!("la importación no crea un aviso propio"),
+                Action::Screenshot { .. } => panic!("la importación no crea una captura propia"),
+                Action::SaveVars { .. } => panic!("la importación no crea un guardado propio"),
             }
         }
         assert_eq!(newlines, 4);
