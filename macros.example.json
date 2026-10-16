@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "macros": [
+    {
+      "id": "hola",
+      "name": "Saludo",
+      "hotkey": {
+        "modifiers": ["ctrl", "shift"],
+        "key": "h"
+      },
+      "action": {
+        "type": "insert_text",
+        "text": "Hola desde Keyboard Macros OS"
+      }
+    }
+  ]
+}
